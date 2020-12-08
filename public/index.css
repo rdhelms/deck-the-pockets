@@ -1,0 +1,29 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+#app {
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: '#1f3545';
+}
+
+#canvas {
+    width: 1000px;
+    height: 600px;
+    outline: 1px solid black;
+    margin: 20px;
+    background-color: #eee;
+
+    background-image: url('images/tree.png');
+    background-repeat: no-repeat;
+    background-size: 40% 90%;
+    background-position: 75% 10%;
+}
+
+#reset-btn {
+    margin-bottom: 20px;
+}

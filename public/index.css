@@ -16,7 +16,7 @@ html, body {
     height: 600px;
     outline: 1px solid black;
     margin: 20px;
-    background-color: #eee;
+    background-color: #ddd;
 
     background-image: url('images/tree.png');
     background-repeat: no-repeat;

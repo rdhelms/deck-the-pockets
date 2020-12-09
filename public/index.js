@@ -1,7 +1,63 @@
+'use strict';
+
 (function() {
+    // Initialize canvas context
+    const canvas = document.getElementById('canvas')
+    canvas.width = canvas.getBoundingClientRect().width
+    canvas.height = canvas.getBoundingClientRect().height
+    const ctx = canvas.getContext('2d')
+
+    const socket = io()
+
+    class Game {
+        players = []
+        decorations = []
+
+        constructor (gameState) {
+            this.players = gameState.players
+
+            const imageUrls = {
+                'logo': 'logo.png',
+                'IT': '1kS20KPPkH-color.svg',
+                'Nursing': '4dTgUX97Dk-color.svg',
+                'Nursing School': '9970muCFGV-color.svg',
+                'EMS': 'gAlCkoUVLl-color.svg',
+                'Finance': 'GVCNrq4ixh-color.svg',
+                'Professional': 'k9T5L3kC0U-color.svg',
+                'Automotive': 'mO5EIsoZ9H-color.svg',
+                'Fitness': 'PusoOu7qGQ-color.svg',
+                'Medical': 'tVMt7KCrkQ-color.svg',
+                'Behavioral Health': 'uKLwvbsbPV-color.svg',
+            }
+
+            gameState.decorations.forEach(decoration => {
+                const ornament = new Ornament({
+                    id: decoration.id,
+                    imageUrl: `/images/${imageUrls[decoration.type]}`,
+                    type: decoration.type,
+                    color: decoration.color,
+                    x: decoration.x,
+                    y: decoration.y,
+                })
+                this.decorations.push(ornament)
+            })
+        }
+
+        updateState (gameState) {
+            this.players = gameState.players
+            gameState.decorations.forEach(decoration => {
+                const foundDecoration = this.decorations.find(d => d.id === decoration.id)
+                foundDecoration.x = decoration.x
+                foundDecoration.y = decoration.y
+            })
+        }
+    }
+
     class Ornament {
-        ctx
+        id
         image
+        type
+        color
         x
         y
         width
@@ -9,11 +65,14 @@
         moving = false
 
         constructor (props) {
-            this.ctx = props.ctx
+            this.id = props.id
 
             const image = new Image()
             image.src = props.imageUrl
             this.image = image
+
+            this.type = props.type
+            this.color = props.color
 
             this.x = props.x || 0
             this.y = props.y || 0
@@ -23,30 +82,31 @@
         }
 
         draw () {
-            this.ctx.beginPath()
-            this.ctx.arc(
+            ctx.beginPath()
+            ctx.arc(
                 this.x + this.width / 2,        // x
                 this.y + this.height / 2,       // y
                 (this.width + this.height) / 4, // radius
                 0,                              // startAngle
                 2 * Math.PI                     // endAngle
             )
-            this.ctx.fillStyle = 'white'
-            this.ctx.lineWidth = 0.5
-            this.ctx.fill()
-            this.ctx.stroke()
-            this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height)
+            ctx.fillStyle = 'white'
+            ctx.lineWidth = 0.5
+            ctx.fill()
+            ctx.stroke()
+            ctx.drawImage(this.image, this.x, this.y, this.width, this.height)
         }
     }
 
-    // Initialize canvas context
-    const canvas = document.getElementById('canvas')
-    canvas.width = canvas.getBoundingClientRect().width
-    canvas.height = canvas.getBoundingClientRect().height
-    const ctx = canvas.getContext('2d')
-
-    // Initialize decoration images array
-    let decorations = []
+    let game
+    socket.on('game', gameState => {
+        if (!game) {
+            game = new Game(gameState)
+        } else {
+            game.updateState(gameState)
+        }
+        console.log(game)
+    })
 
     // Follow the mouse
     const mouse = {
@@ -55,7 +115,7 @@
     }
     canvas.onmousedown = (event) => {
         // Grab first possible decoration
-        const grabbedDecoration = decorations.find(decoration => {
+        const grabbedDecoration = game.decorations.find(decoration => {
             // Check whether grabbing a decoration
             return mouse.x >= decoration.x
                 && mouse.x <= (decoration.x + decoration.width)
@@ -69,7 +129,7 @@
     }
     canvas.onmouseup = (event) => {
         // Release all decorations
-        decorations.forEach(decoration => decoration.moving = false)
+        game.decorations.forEach(decoration => decoration.moving = false)
     }
     canvas.onmousemove = (event) => {
         const rect = event.target.getBoundingClientRect()
@@ -77,26 +137,17 @@
         mouse.y = event.clientY - rect.top + 1
 
         // Update any moving decorations
-        decorations.forEach(decoration => {
+        game.decorations.forEach(decoration => {
             if (decoration.moving) {
                 decoration.x = mouse.x - (decoration.width / 2)
                 decoration.y = mouse.y - (decoration.height / 2)
+                socket.emit('decoration', {
+                    id: decoration.id,
+                    x: decoration.x,
+                    y: decoration.y,
+                })
             }
         })
-    }
-
-    let countdown
-    const startGame = () => {
-        countdown = 30
-        const timer = setInterval(() => {
-            if (countdown === 0) {
-                clearTimeout(timer)
-                countdown = undefined
-                return
-            }
-
-            countdown--
-        }, 1000)
     }
 
     const draw = () => {
@@ -104,65 +155,22 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
         // Draw decorations
-        decorations.forEach(d => d.draw())
-
-        // If game is playing, show timer
-        if (countdown !== undefined) {
-            ctx.fillStyle = 'black'
-            ctx.font = '30px Arial'
-            ctx.fillText(countdown, canvas.width - 100, 50)
+        if (game) {
+            game.decorations.forEach(d => d.draw())
         }
 
         window.requestAnimationFrame(draw)
     }
-
-    const initDecorations = () => {
-        decorations = []
-        for (let i = 0; i < 5; i++) {
-            const imageUrls = [
-                'logo.png',
-                '1kS20KPPkH-color.svg',
-                '4dTgUX97Dk-color.svg',
-                '9970muCFGV-color.svg',
-                'gAlCkoUVLl-color.svg',
-                'GVCNrq4ixh-color.svg',
-                'k9T5L3kC0U-color.svg',
-                'mO5EIsoZ9H-color.svg',
-                'PusoOu7qGQ-color.svg',
-                'tVMt7KCrkQ-color.svg',
-                'uKLwvbsbPV-color.svg',
-            ]
-            imageUrls.forEach((imageUrl, index) => {
-                const logo = new Ornament({
-                    ctx,
-                    imageUrl: `/images/${imageUrl}`,
-                    x: 25,
-                    y: 25 + (50 * index),
-                })
-                decorations.push(logo)
-            })
-        }
-    }
-
-    let animationRequest
-    const init = () => {
-        if (animationRequest) {
-            window.cancelAnimationFrame(animationRequest)
-        }
-        initDecorations()
-        animationRequest = window.requestAnimationFrame(draw)
-    }
+    window.requestAnimationFrame(draw)
 
     // Handle buttons
     const resetButton = document.getElementById('reset-btn')
     resetButton.onclick = () => {
-        init()
+        // TODO: Tell server to reset the game
     }
 
     const playButton = document.getElementById('play-btn')
     playButton.onclick = () => {
-        startGame()
+        // TODO: Tell server to start the hunt
     }
-
-    init()
 })()

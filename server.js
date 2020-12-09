@@ -25,10 +25,13 @@ class Ornament {
 }
 
 class Game {
+    id
     players = []
     decorations = []
 
     constructor () {
+        this.id = Math.floor(Math.random() * 1e9)
+
         const decorationTypes = [
             'logo',
             'IT',
@@ -61,15 +64,19 @@ let game = new Game()
 
 io.on('connection', socket => {
     console.log(`${socket.id} connected`)
-    game.players.push(socket.id)
-    socket.emit('game', game)
+    const newPlayer = {
+        id: socket.id,
+        score: 0,
+    }
+    game.players.push(newPlayer)
+    io.emit('game', game)
 
     socket.on('decoration', decoration => {
         const foundDecoration = game.decorations.find(d => d.id === decoration.id)
         if (foundDecoration) {
             foundDecoration.x = decoration.x
             foundDecoration.y = decoration.y
-            socket.broadcast.emit('game', game)
+            io.emit('decoration', decoration)
         }
     })
 
@@ -80,8 +87,8 @@ io.on('connection', socket => {
 
     socket.on('disconnect', () => {
         console.log(`${socket.id} disconnected`)
-        const playerIndex = game.players.indexOf(socket.id)
-        game.players.splice(playerIndex, 1)
+        const playerIndex = game.players.findIndex(player => player.id === socket.id)
+        const removedPlayer = game.players.splice(playerIndex, 1)[0]
         io.emit('game', game)
     })
 })

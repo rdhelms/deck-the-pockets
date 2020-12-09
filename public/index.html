@@ -11,9 +11,11 @@
 </head>
 <body>
     <div id="app">
-        <canvas id="canvas"></canvas>
+        <div id="canvas-and-scores">
+            <canvas id="canvas"></canvas>
+            <div id="scoreboard"></div>
+        </div>
         <button id="reset-btn">Reset</button>
-        <button id="play-btn">Play</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

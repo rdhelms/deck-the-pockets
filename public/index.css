@@ -4,18 +4,20 @@ html, body {
 }
 
 #app {
-    width: 100vw;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: inline-block;
+    font-family: Arial;
     color: '#1f3545';
+}
+
+#canvas-and-scores {
+    display: flex;
+    margin: 20px;
+    outline: 1px solid black;
 }
 
 #canvas {
     width: 1000px;
     height: 600px;
-    outline: 1px solid black;
-    margin: 20px;
     background-color: #ddd;
 
     background-image: url('images/tree.png');
@@ -24,6 +26,21 @@ html, body {
     background-position: 75% 10%;
 }
 
+#scoreboard {
+    width: 200px;
+    border-left: 1px solid black;
+}
+
+.score {
+    padding: 6px;
+    border-bottom: 1px solid black;
+}
+
+.score.self {
+    background-color: #1671ff;
+    color: white;
+}
+
 #reset-btn {
-    margin-bottom: 20px;
+    margin: 20px;
 }

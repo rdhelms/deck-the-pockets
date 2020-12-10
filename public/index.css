@@ -3,44 +3,32 @@ html, body {
     padding: 0;
 }
 
-#app {
-    display: inline-block;
-    font-family: Arial;
-    color: '#1f3545';
-}
-
-#canvas-and-scores {
-    display: flex;
-    margin: 20px;
-    outline: 1px solid black;
-}
-
 #canvas {
-    width: 1000px;
+    margin: 10px;
+    width: 1200px;
     height: 600px;
     background-color: #ddd;
 
     background-image: url('images/tree.png');
     background-repeat: no-repeat;
-    background-size: 40% 90%;
-    background-position: 75% 10%;
-}
-
-#scoreboard {
-    width: 200px;
-    border-left: 1px solid black;
-}
-
-.score {
-    padding: 6px;
-    border-bottom: 1px solid black;
-}
-
-.score.self {
-    background-color: #1671ff;
-    color: white;
+    background-size: 400px 540px;
+    background-position: 450px 0px;
 }
 
 #reset-btn {
     margin: 20px;
+    background-color: #1671ff;
+    color: white;
+    font-size: 14px;
+    line-height: 19px;
+    padding: 9px 24px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+
+#reset-btn:hover {
+    background-color: #1552b4;
 }

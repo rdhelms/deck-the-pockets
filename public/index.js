@@ -9,6 +9,28 @@
 
     const socket = io()
 
+    // Tree
+    const tree = {
+        top: -50,
+        bottom: 550,
+        left: 420,
+        right: 870,
+    }
+    tree.middle = (tree.right + tree.left) / 2
+    tree.leftSlope = ((tree.bottom - tree.top) / (tree.middle - tree.left))
+    tree.rightSlope = ((tree.bottom - tree.top) / (tree.right - tree.middle))
+    const isDropOnTree = (drop) => {
+        return drop.y >= tree.top
+            && drop.y <= tree.bottom
+            && ((
+                drop.x <= tree.middle
+                && drop.y >= tree.leftSlope * (tree.middle - drop.x) + tree.top
+            ) || (
+                drop.x > tree.middle
+                && drop.y >= tree.rightSlope * (drop.x - tree.middle) + tree.top
+            ))
+    }
+
     class Player {
         id
         score
@@ -33,6 +55,7 @@
         width
         height
         moving = false
+        isOnTree = false
 
         constructor (props) {
             this.id = props.id
@@ -43,6 +66,7 @@
 
             this.type = props.type
             this.color = props.color
+            this.isOnTree = props.isOnTree
 
             this.x = props.x || 0
             this.y = props.y || 0
@@ -56,7 +80,7 @@
             ctx.arc(
                 this.x + this.width / 2,            // x
                 this.y + this.height / 2,           // y
-                (this.width + this.height) / 4 + 1, // radius
+                (this.width + this.height) / 4, // radius
                 0,                                  // startAngle
                 2 * Math.PI                         // endAngle
             )
@@ -74,9 +98,20 @@
         players = []
         decorations = []
         scoreboard
+        stage
+        styleBonuses
+        huntCountdown = 15
+        huntTarget
 
         constructor (gameState) {
             this.id = gameState.id
+            this.stage = gameState.stage
+            if (gameState.huntCountdown !== undefined) {
+                this.huntCountdown = gameState.huntCountdown
+            }
+            if (gameState.huntTarget) {
+                this.huntTarget = gameState.huntTarget
+            }
 
             const imageUrls = {
                 'logo': 'logo.png',
@@ -108,6 +143,7 @@
                     color: decoration.color,
                     x: decoration.x,
                     y: decoration.y,
+                    isOnTree: decoration.isOnTree,
                 })
                 this.decorations.push(ornament)
             })
@@ -116,31 +152,90 @@
         }
 
         draw () {
+            ctx.strokeStyle = 'black'
+            ctx.lineWidth = 1
+            ctx.strokeRect(0, 0, canvas.width, canvas.height)
+
             this.decorations.forEach(d => d.draw())
             
             // Draw scoreboard
-            this.players.forEach(player => {
-                const existingEl = document.querySelector(`.score[data-playerid="${player.id}"]`)
-                if (existingEl) {
-                    if (existingEl.textContent !== player.formattedScore) {
-                        existingEl.textContent = player.formattedScore
-                    }
-                } else {
-                    const scoreEl = document.createElement('div')
-                    scoreEl.className = 'score'
-                    scoreEl.dataset.playerid = player.id
-                    scoreEl.textContent = player.formattedScore
-                    if (player.id === socket.id) {
-                        scoreEl.classList.add('self')
-                    }
-                    this.scoreboard.appendChild(scoreEl)
-                }
+            this.players.forEach((player, index) => {
+                ctx.strokeStyle = 'black'
+                ctx.lineWidth = 1
+                ctx.strokeRect(canvas.width - 200, index * 30, 200, 30)
+                ctx.fillStyle = player.id === socket.id ? 'white' : 'black'
+                ctx.font = '16px Arial'
+                ctx.fillText(player.formattedScore, canvas.width - 200 + 10, index * 30 + 20)
+                ctx.fillStyle = player.id === socket.id ? '#1671ff' : 'white'
+                ctx.fillRect(canvas.width - 200, index * 30, 200, 30)
             })
+            ctx.strokeStyle = 'black'
+            ctx.lineWidth = 1
+            ctx.strokeRect(canvas.width - 200, 0, 200, canvas.height)
+            ctx.fillStyle = 'white'
+            ctx.fillRect(canvas.width - 200, 0, 200, canvas.height)
+
+            // Show style bonuses stage
+            if ([ 'style bonuses', 'ready for hunt', 'hunting' ].includes(this.stage)) {
+                ctx.fillStyle = 'black'
+                ctx.font = '16px Arial'
+                ctx.fillText('Decoration complete!', 20, 30)
+                ctx.fillText('Style bonuses:', 20, 60)
+                this.players.forEach((player, index) => {
+                    ctx.strokeStyle = 'black'
+                    ctx.lineWidth = 1
+                    ctx.strokeRect(0, index * 30 + 80, 200, 30)
+                    ctx.fillStyle = player.id === socket.id ? 'white' : 'black'
+                    ctx.font = '16px Arial'
+                    const playerBonus = this.styleBonuses && this.styleBonuses[player.id] || '0'
+                    ctx.fillText(`${player.id.slice(0, 7)}: ${playerBonus}`, 20, index * 30 + 20 + 80)
+                    ctx.fillStyle = player.id === socket.id ? '#1671ff' : 'white'
+                    ctx.fillRect(0, index * 30 + 80, 200, 30)
+                })
+                ctx.lineWidth = 1
+                ctx.strokeRect(0, 0, 200, canvas.height)
+                ctx.fillStyle = 'white'
+                ctx.fillRect(0, 0, 200, canvas.height)
+            }
+
+            // Show hunt stage
+            if ([ 'ready for hunt', 'hunting' ].includes(this.stage)) {
+                ctx.fillStyle = 'black'
+                ctx.font = '16px Arial'
+                if (this.stage === 'ready for hunt') {
+                    ctx.fillText(`Hunt starting in: ${this.huntCountdown}`, 220, 30)
+                } else if (this.stage === 'hunting') {
+                    ctx.fillText('Hunt has started!', 220, 30)
+                }
+                ctx.fillText('Target (50 pts):', 220, 60)
+                ctx.beginPath()
+                ctx.lineWidth = 1
+                ctx.strokeStyle = 'black'
+                ctx.arc(300, 125, 55, 0, 2 * Math.PI)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.lineWidth = 10
+                if (this.stage === 'hunting' && this.huntTarget) {
+                    const targetDecoration = this.decorations.find(d => d.id === this.huntTarget.id)
+                    ctx.strokeStyle = targetDecoration.color
+                    ctx.drawImage(targetDecoration.image, 250, 75, 100, 100)
+                } else {
+                    ctx.strokeStyle = 'black'
+                }
+                ctx.arc(300, 125, 50, 0, 2 * Math.PI)
+                ctx.stroke()
+                ctx.lineWidth = 1
+                ctx.strokeRect(200, 0, 200, 200)
+                ctx.fillStyle = 'white'
+                ctx.fillRect(200, 0, 200, 200)
+            }
         }
 
         updateState (gameState) {
-            this.players.filter(player => !gameState.players.find(p => player.id === p.id)).forEach(player => {
-                this.removePlayer(player)
+            this.players.forEach(player => {
+                if (!gameState.players.find(p => player.id === p.id)) {
+                    this.removePlayer(player)
+                }
             })
             gameState.players.forEach(player => {
                 this.updatePlayer(player)
@@ -181,6 +276,14 @@
                 scoreEl.remove()
             }
         }
+
+        applyStyleBonuses (styleBonuses) {
+            this.styleBonuses = styleBonuses
+
+            this.players.forEach(player => {
+                player.score += (styleBonuses[player.id] || 0)
+            })
+        }
     }
 
     let game
@@ -194,6 +297,46 @@
     socket.on('decoration', decoration => {
         game.updateDecoration(decoration)
     })
+    socket.on('player joined', newPlayer => {
+        game.addPlayer(newPlayer)
+    })
+    socket.on('player left', removedPlayer => {
+        game.removePlayer(removedPlayer)
+    })
+    socket.on('score update', scoreUpdate => {
+        const foundPlayer = game.players.find(player => player.id === scoreUpdate.playerId)
+        if (foundPlayer) {
+            game.updatePlayer({
+                id: foundPlayer.id,
+                score: foundPlayer.score + scoreUpdate.scoreChange
+            })
+        }
+        if ([ 'onTree', 'offTree' ].includes(scoreUpdate.event.type)) {
+            const foundDecoration = game.decorations.find(d => d.id === scoreUpdate.event.decorationId)
+            if (foundDecoration) {
+                foundDecoration.isOnTree = scoreUpdate.event.type === 'onTree'
+            }
+        }
+    })
+    socket.on('end decorating', () => {
+        game.stage = 'style bonuses'
+    })
+    socket.on('style bonuses', styleBonuses => {
+        game.applyStyleBonuses(styleBonuses)
+    })
+    socket.on('ready for hunt', () => {
+        game.stage = 'ready for hunt'
+    })
+    socket.on('hunt countdown', countdown => {
+        game.huntCountdown = countdown
+    })
+    socket.on('start hunt', huntTarget => {
+        game.stage = 'hunting'
+        game.huntTarget = huntTarget
+    })
+    socket.on('game over', winner => {
+        console.log(winner)
+    })
 
     // Follow the mouse
     const mouse = {
@@ -201,6 +344,10 @@
         y: undefined,
     }
     canvas.onmousedown = (event) => {
+        if (![ 'decorating', 'hunting' ].includes(game.stage)) {
+            return
+        }
+
         // Grab first possible decoration
         const grabbedDecoration = game.decorations.find(decoration => {
             // Check whether grabbing a decoration
@@ -211,12 +358,55 @@
         })
 
         if (grabbedDecoration) {
-            grabbedDecoration.moving = true
+            if (game.stage === 'hunting' && grabbedDecoration.id === game.huntTarget.id) {
+                socket.emit('score', {
+                    playerId: socket.id,
+                    scoreChange: 50,
+                    event: {
+                        type: 'target found',
+                    }
+                })
+            } else {
+                grabbedDecoration.moving = true
+            }
         }
     }
+
     canvas.onmouseup = (event) => {
         // Release all decorations
-        game.decorations.forEach(decoration => decoration.moving = false)
+        game.decorations.forEach(decoration => {
+            if (decoration.moving) {
+                decoration.moving = false
+                const dropped = {
+                    x: (decoration.x + decoration.width / 2),
+                    y: (decoration.y + decoration.height / 2)
+                }
+
+                if (isDropOnTree(dropped)) {
+                    if (!decoration.isOnTree) {
+                        socket.emit('score', {
+                            playerId: socket.id,
+                            scoreChange: 10,
+                            event: {
+                                type: 'onTree',
+                                decorationId: decoration.id,
+                            }
+                        })
+                    }
+                } else {
+                    if (decoration.isOnTree) {
+                        socket.emit('score', {
+                            playerId: socket.id,
+                            scoreChange: -10,
+                            event: {
+                                type: 'offTree',
+                                decorationId: decoration.id,
+                            }
+                        })
+                    }
+                }
+            }
+        })
     }
     canvas.onmousemove = (event) => {
         const rect = event.target.getBoundingClientRect()
@@ -245,6 +435,14 @@
         if (game) {
             game.draw()
         }
+
+        // Draw tree boundary
+        // ctx.beginPath()
+        // ctx.moveTo(tree.middle, tree.top)
+        // ctx.lineTo(tree.right, tree.bottom)
+        // ctx.lineTo(tree.left, tree.bottom)
+        // ctx.lineTo(tree.middle, tree.top)
+        // ctx.stroke()
 
         window.requestAnimationFrame(draw)
     }

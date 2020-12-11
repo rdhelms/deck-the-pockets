@@ -107,6 +107,14 @@ io.on('connection', socket => {
     socket.emit('game', game)
     socket.broadcast.emit('player joined', newPlayer)
 
+    socket.on('update player name', nameChange => {
+        const foundPlayer = game.players.find(p => p.id === nameChange.id)
+        if (foundPlayer) {
+            foundPlayer.name = nameChange.name
+            io.emit('new player name', nameChange)
+        }
+    })
+
     socket.on('decoration', decoration => {
         const foundDecoration = game.decorations.find(d => d.id === decoration.id)
         if (foundDecoration) {
@@ -174,7 +182,7 @@ io.on('connection', socket => {
             clearInterval(game.huntInterval)
         }
         game = new Game({
-            players: game.players.map(p => ({ id: p.id, score: 0 }))
+            players: game.players.map(p => ({ id: p.id, score: 0, name: p.name }))
         })
         io.emit('game', game)
     })

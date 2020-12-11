@@ -37,14 +37,17 @@
     class Player {
         id
         score
+        name
 
         get formattedScore () {
-            return `${this.id.slice(0, 7)}: ${this.score}`
+            const name = this.name || this.id.slice(0, 7)
+            return `${name}: ${this.score}`
         }
 
         constructor (props) {
             this.id = props.id
             this.score = props.score
+            this.name = props.name
         }
     }
 
@@ -151,6 +154,7 @@
                 const newPlayer = new Player({
                     id: player.id,
                     score: player.score,
+                    name: player.name,
                 })
                 this.players.push(newPlayer)
             })
@@ -205,8 +209,9 @@
                     ctx.strokeRect(0, index * 30 + 80, 200, 30)
                     ctx.fillStyle = player.id === socket.id ? 'white' : 'black'
                     ctx.font = '16px Arial'
+                    const playerName = player.name || player.id.slice(0, 7)
                     const playerBonus = this.styleBonuses && this.styleBonuses[player.id] || '0'
-                    ctx.fillText(`${player.id.slice(0, 7)}: ${playerBonus}`, 20, index * 30 + 20 + 80)
+                    ctx.fillText(`${playerName}: ${playerBonus}`, 20, index * 30 + 20 + 80)
                     ctx.fillStyle = player.id === socket.id ? '#1671ff' : 'white'
                     ctx.fillRect(0, index * 30 + 80, 200, 30)
                 })
@@ -225,7 +230,9 @@
                 } else if (this.stage === 'hunting') {
                     ctx.fillText('Hunt has started!', 220, 30)
                 } else if (this.stage === 'end') {
-                    ctx.fillText(`Hunt winner: ${this.huntWinnerId}`, 220, 30)
+                    const huntWinner = this.players.find(p => p.id.slice(0, 7) === this.huntWinnerId)
+                    const huntWinnerName = (huntWinner && huntWinner.name) || this.huntWinnerId
+                    ctx.fillText(`Hunt winner: ${huntWinnerName}`, 220, 30)
                 }
                 ctx.fillText('Target (50 pts):', 220, 60)
                 ctx.beginPath()
@@ -260,7 +267,9 @@
                 ctx.font = '16px Arial'
                 ctx.fillText('The winner is...', tree.left + 170, tree.top + 130)
                 ctx.font = '40px Arial'
-                ctx.fillText(`${this.winnerId}!`, tree.left + 150, tree.top + 180)
+                const winningPlayer = this.players.find(p => p.id.slice(0, 7) === this.winnerId)
+                const winningName = (winningPlayer && winningPlayer.name) || this.winnerId
+                ctx.fillText(`${winningName}!`, tree.left + 150, tree.top + 180)
                 ctx.drawImage(
                     this.endImage,
                     tree.left + 20,                 // top left x
@@ -302,6 +311,7 @@
         updatePlayer (player) {
             const foundPlayer = this.players.find(p => p.id === player.id)
             if (foundPlayer) {
+                foundPlayer.name = player.name
                 foundPlayer.score = player.score
             } else {
                 this.addPlayer(player)
@@ -312,6 +322,7 @@
             const newPlayer = new Player({
                 id: player.id,
                 score: player.score,
+                name: player.name,
             })
             this.players.push(newPlayer)
         }
@@ -450,6 +461,18 @@
         socket.emit('reset')
     }
 
+    const nameSubmitBtn = document.getElementById('name-submit-btn')
+    nameSubmitBtn.onclick = () => {
+        const nameInput = document.getElementById('name')
+        if (nameInput.value && !game.players.some(p => (p.name || p.id.slice(0, 7)) === nameInput.value)) {
+            socket.emit('update player name', {
+                id: socket.id,
+                name: nameInput.value,
+            })
+            nameInput.value = ''
+        }
+    }
+
     // Socket events
     socket.on('game', gameState => {
         if (game && game.id === gameState.id) {
@@ -460,6 +483,12 @@
     })
     socket.on('decoration', decoration => {
         game.updateDecoration(decoration)
+    })
+    socket.on('new player name', nameChange => {
+        const foundPlayer = game.players.find(p => p.id === nameChange.id)
+        if (foundPlayer) {
+            foundPlayer.name = nameChange.name
+        }
     })
     socket.on('player joined', newPlayer => {
         game.addPlayer(newPlayer)
@@ -472,7 +501,8 @@
         if (foundPlayer) {
             game.updatePlayer({
                 id: foundPlayer.id,
-                score: foundPlayer.score + scoreUpdate.scoreChange
+                score: foundPlayer.score + scoreUpdate.scoreChange,
+                name: foundPlayer.name,
             })
         }
         if ([ 'onTree', 'offTree' ].includes(scoreUpdate.event.type)) {

@@ -32,3 +32,8 @@ html, body {
 #reset-btn:hover {
     background-color: #1552b4;
 }
+
+#name-container {
+    display: inline-block;
+    margin-left: 600px;
+}

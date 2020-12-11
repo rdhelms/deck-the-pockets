@@ -31,6 +31,9 @@
             ))
     }
 
+    // Game
+    let game
+
     class Player {
         id
         score
@@ -56,6 +59,7 @@
         height
         moving = false
         isOnTree = false
+        owner
 
         constructor (props) {
             this.id = props.id
@@ -102,6 +106,9 @@
         styleBonuses
         huntCountdown = 15
         huntTarget
+        huntWinnerId
+        winnerId
+        endImage
 
         constructor (gameState) {
             this.id = gameState.id
@@ -112,6 +119,19 @@
             if (gameState.huntTarget) {
                 this.huntTarget = gameState.huntTarget
             }
+            if (gameState.huntWinnerId) {
+                this.huntWinnerId = gameState.huntWinnerId
+            }
+            if (gameState.winnerId) {
+                this.winnerId = gameState.winnerId
+            }
+            if (gameState.styleBonuses) {
+                this.applyStyleBonuses(gameState.styleBonuses)
+            }
+
+            const endImage = new Image()
+            endImage.src = '/images/success-graphic.png'
+            this.endImage = endImage
 
             const imageUrls = {
                 'logo': 'logo.png',
@@ -155,8 +175,6 @@
             ctx.strokeStyle = 'black'
             ctx.lineWidth = 1
             ctx.strokeRect(0, 0, canvas.width, canvas.height)
-
-            this.decorations.forEach(d => d.draw())
             
             // Draw scoreboard
             this.players.forEach((player, index) => {
@@ -175,8 +193,8 @@
             ctx.fillStyle = 'white'
             ctx.fillRect(canvas.width - 200, 0, 200, canvas.height)
 
-            // Show style bonuses stage
-            if ([ 'style bonuses', 'ready for hunt', 'hunting' ].includes(this.stage)) {
+            // Show style bonuses
+            if ([ 'style bonuses', 'ready for hunt', 'hunting', 'end' ].includes(this.stage)) {
                 ctx.fillStyle = 'black'
                 ctx.font = '16px Arial'
                 ctx.fillText('Decoration complete!', 20, 30)
@@ -198,14 +216,16 @@
                 ctx.fillRect(0, 0, 200, canvas.height)
             }
 
-            // Show hunt stage
-            if ([ 'ready for hunt', 'hunting' ].includes(this.stage)) {
+            // Show hunt info
+            if ([ 'ready for hunt', 'hunting', 'end' ].includes(this.stage)) {
                 ctx.fillStyle = 'black'
                 ctx.font = '16px Arial'
                 if (this.stage === 'ready for hunt') {
                     ctx.fillText(`Hunt starting in: ${this.huntCountdown}`, 220, 30)
                 } else if (this.stage === 'hunting') {
                     ctx.fillText('Hunt has started!', 220, 30)
+                } else if (this.stage === 'end') {
+                    ctx.fillText(`Hunt winner: ${this.huntWinnerId}`, 220, 30)
                 }
                 ctx.fillText('Target (50 pts):', 220, 60)
                 ctx.beginPath()
@@ -215,20 +235,48 @@
                 ctx.stroke()
                 ctx.beginPath()
                 ctx.lineWidth = 10
-                if (this.stage === 'hunting' && this.huntTarget) {
+                if (this.stage === 'ready for hunt') {
+                    ctx.strokeStyle = 'black'
+                    ctx.fillStyle = 'black'
+                    ctx.font = '60px Arial'
+                    ctx.fillText('?', 283, 145)
+                } else if (this.huntTarget) {
                     const targetDecoration = this.decorations.find(d => d.id === this.huntTarget.id)
                     ctx.strokeStyle = targetDecoration.color
                     ctx.drawImage(targetDecoration.image, 250, 75, 100, 100)
-                } else {
-                    ctx.strokeStyle = 'black'
                 }
                 ctx.arc(300, 125, 50, 0, 2 * Math.PI)
                 ctx.stroke()
+                ctx.strokeStyle = 'black'
                 ctx.lineWidth = 1
                 ctx.strokeRect(200, 0, 200, 200)
                 ctx.fillStyle = 'white'
                 ctx.fillRect(200, 0, 200, 200)
             }
+
+            // Show end info
+            if (this.stage === 'end') {
+                ctx.fillStyle = 'black'
+                ctx.font = '16px Arial'
+                ctx.fillText('The winner is...', tree.left + 170, tree.top + 130)
+                ctx.font = '40px Arial'
+                ctx.fillText(`${this.winnerId}!`, tree.left + 150, tree.top + 180)
+                ctx.drawImage(
+                    this.endImage,
+                    tree.left + 20,                 // top left x
+                    tree.top + 250,                 // top left y
+                    tree.right - tree.left - 50,    // width
+                    tree.bottom - tree.top - 300    // height
+                )
+                ctx.strokeStyle = 'black'
+                ctx.lineWidth = 1
+                ctx.strokeRect(tree.left, tree.top, tree.right - tree.left, tree.bottom - tree.top)
+                ctx.fillStyle = 'white'
+                ctx.fillRect(tree.left, tree.top, tree.right - tree.left, tree.bottom - tree.top)
+            }
+
+            // Draw decorations
+            this.decorations.forEach(d => d.draw())
         }
 
         updateState (gameState) {
@@ -285,58 +333,6 @@
             })
         }
     }
-
-    let game
-    socket.on('game', gameState => {
-        if (game && game.id === gameState.id) {
-            game.updateState(gameState)
-        } else {
-            game = new Game(gameState)
-        }
-    })
-    socket.on('decoration', decoration => {
-        game.updateDecoration(decoration)
-    })
-    socket.on('player joined', newPlayer => {
-        game.addPlayer(newPlayer)
-    })
-    socket.on('player left', removedPlayer => {
-        game.removePlayer(removedPlayer)
-    })
-    socket.on('score update', scoreUpdate => {
-        const foundPlayer = game.players.find(player => player.id === scoreUpdate.playerId)
-        if (foundPlayer) {
-            game.updatePlayer({
-                id: foundPlayer.id,
-                score: foundPlayer.score + scoreUpdate.scoreChange
-            })
-        }
-        if ([ 'onTree', 'offTree' ].includes(scoreUpdate.event.type)) {
-            const foundDecoration = game.decorations.find(d => d.id === scoreUpdate.event.decorationId)
-            if (foundDecoration) {
-                foundDecoration.isOnTree = scoreUpdate.event.type === 'onTree'
-            }
-        }
-    })
-    socket.on('end decorating', () => {
-        game.stage = 'style bonuses'
-    })
-    socket.on('style bonuses', styleBonuses => {
-        game.applyStyleBonuses(styleBonuses)
-    })
-    socket.on('ready for hunt', () => {
-        game.stage = 'ready for hunt'
-    })
-    socket.on('hunt countdown', countdown => {
-        game.huntCountdown = countdown
-    })
-    socket.on('start hunt', huntTarget => {
-        game.stage = 'hunting'
-        game.huntTarget = huntTarget
-    })
-    socket.on('game over', winner => {
-        console.log(winner)
-    })
 
     // Follow the mouse
     const mouse = {
@@ -453,4 +449,63 @@
     resetButton.onclick = () => {
         socket.emit('reset')
     }
+
+    // Socket events
+    socket.on('game', gameState => {
+        if (game && game.id === gameState.id) {
+            game.updateState(gameState)
+        } else {
+            game = new Game(gameState)
+        }
+    })
+    socket.on('decoration', decoration => {
+        game.updateDecoration(decoration)
+    })
+    socket.on('player joined', newPlayer => {
+        game.addPlayer(newPlayer)
+    })
+    socket.on('player left', removedPlayer => {
+        game.removePlayer(removedPlayer)
+    })
+    socket.on('score update', scoreUpdate => {
+        const foundPlayer = game.players.find(player => player.id === scoreUpdate.playerId)
+        if (foundPlayer) {
+            game.updatePlayer({
+                id: foundPlayer.id,
+                score: foundPlayer.score + scoreUpdate.scoreChange
+            })
+        }
+        if ([ 'onTree', 'offTree' ].includes(scoreUpdate.event.type)) {
+            const foundDecoration = game.decorations.find(d => d.id === scoreUpdate.event.decorationId)
+            if (foundDecoration) {
+                if (scoreUpdate.event.type === 'onTree') {
+                    foundDecoration.owner = scoreUpdate.playerId
+                    foundDecoration.isOnTree = true
+                } else {
+                    foundDecoration.isOnTree = false
+                }
+            }
+        }
+    })
+    socket.on('end decorating', () => {
+        game.stage = 'style bonuses'
+    })
+    socket.on('style bonuses', styleBonuses => {
+        game.applyStyleBonuses(styleBonuses)
+    })
+    socket.on('ready for hunt', () => {
+        game.stage = 'ready for hunt'
+    })
+    socket.on('hunt countdown', countdown => {
+        game.huntCountdown = countdown
+    })
+    socket.on('start hunt', huntTarget => {
+        game.stage = 'hunting'
+        game.huntTarget = huntTarget
+    })
+    socket.on('game over', endInfo => {
+        game.huntWinnerId = endInfo.huntWinnerId
+        game.winnerId = endInfo.winnerId
+        game.stage = 'end'
+    })
 })()

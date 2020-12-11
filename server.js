@@ -31,8 +31,12 @@ class Game {
     players = []
     decorations = []
     stage = 'decorating'
+    styleBonuses
+    huntInterval
     huntCountdown = 15
     huntTarget
+    huntWinnerId
+    winnerId
 
     constructor (props) {
         this.id = Math.floor(Math.random() * 1e9)
@@ -43,16 +47,16 @@ class Game {
 
         const decorationTypes = [
             'logo',
-            // 'IT',
-            // 'Nursing',
-            // 'Nursing School',
-            // 'EMS',
-            // 'Finance',
-            // 'Professional',
-            // 'Automotive',
-            // 'Fitness',
-            // 'Medical',
-            // 'Behavioral Health',
+            'IT',
+            'Nursing',
+            'Nursing School',
+            'EMS',
+            'Finance',
+            'Professional',
+            'Automotive',
+            'Fitness',
+            'Medical',
+            'Behavioral Health',
         ]
         const decorationColors = [ 'red', 'orange', 'yellow', 'green', 'blue', 'purple' ]
         decorationTypes.forEach((type, index) => {
@@ -73,12 +77,12 @@ class Game {
         io.emit('ready for hunt')
         this.huntCountdown = 15
         io.emit('hunt countdown', this.huntCountdown)
-        const huntCountdown = setInterval(() => {
+        this.huntInterval = setInterval(() => {
             this.huntCountdown--
             io.emit('hunt countdown', this.huntCountdown)
             if (this.huntCountdown === 0) {
                 this.startHunt()
-                clearInterval(huntCountdown)
+                clearInterval(this.huntInterval)
             }
         }, 1000)
     }
@@ -130,7 +134,7 @@ io.on('connection', socket => {
             if (game.stage === 'decorating' && isDecoratingDone) {
                 game.stage = 'style bonuses'
                 io.emit('end decorating')
-                const styleBonuses = {}
+                game.styleBonuses = {}
                 game.players.forEach(player => {
                     let styleBonus = 0
                     const ownDecorations = game.decorations.filter(d => d.owner === player.id)
@@ -148,21 +152,27 @@ io.on('connection', socket => {
                         const yBonus = Math.abs(d.y - averagePos.y)
                         styleBonus += (xBonus + yBonus)
                     })
-                    styleBonuses[player.id] = Math.floor(styleBonus / 20)
+                    game.styleBonuses[player.id] = Math.floor(styleBonus / 20)
                 })
-                io.emit('style bonuses', styleBonuses)
+                io.emit('style bonuses', game.styleBonuses)
                 game.startHuntCountdown()
             } else if (game.stage === 'hunting' && scoreUpdate.event.type === 'target found') {
+                game.huntWinnerId = foundPlayer.id.slice(0, 7)
                 const winner = game.players.sort((a, b) => b.score - a.score)[0]
-                game.winner = winner.id
+                game.winnerId = winner.id.slice(0, 7)
+                game.stage = 'end'
                 io.emit('game over', {
-                    winner: game.winner,
+                    huntWinnerId: game.huntWinnerId,
+                    winnerId: game.winnerId,
                 })
             }
         }
     })
 
     socket.on('reset', () => {
+        if (game.huntInterval) {
+            clearInterval(game.huntInterval)
+        }
         game = new Game({
             players: game.players.map(p => ({ id: p.id, score: 0 }))
         })
